@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+
+VERSION = "0.1"
+
+from argparse import ArgumentParser, ArgumentTypeError
+from bz2 import decompress
+from os import getuid
+from pathlib import Path
+from re import compile, DOTALL
+from shutil import copyfileobj
+from sys import stderr, exit
+from urllib import request
+from urllib.error import HTTPError
+
+CSGO_HOME_DIR = Path.home().joinpath(
+    ".local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo")
+
+# Use latest console dump
+CONDUMP = sorted(CSGO_HOME_DIR.glob("condump*.txt"))[-1]
+
+# Only supports bz2 at the moment because I haven't seen gzip, tar etc. used
+# If you happen to have such server, open a GitHub Issue
+SUFFIXES = [".bz2"]
+
+
+# ANSI Color escapes
+class C:
+    PRPL = '\033[95m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+
+
+def HTPPErrorHandler(error):
+    if error.code == 404:
+        print("{0}  Not found on the server, skipping{1}"
+              .format(C.YELLOW, C.ENDC))
+    else:
+        raise error
+
+
+def condumpxxx(string):
+    # condumpXXX.txt
+    if not compile('((?:[a-z][a-z]+))(\\d)(\\d)(\\d)(.)((?:[a-z][a-z]+))',
+                   DOTALL).search(string):
+        raise ArgumentTypeError("syntax: condumpXXX.txt")
+    else:
+        return string
+
+
+if __name__ == '__main__':
+    print("{0}{1}CS:GO Community Server Materials Downloader v{2}{3}\n"
+          .format(C.BOLD, C.PRPL, VERSION, C.ENDC))
+
+    if getuid() == 0:
+        print("{0}{1}Don't run this script as root!{2}"
+              .format(C.RED, C.BOLD, C.ENDC), file=stderr)
+        exit(-1)
+
+    parser = ArgumentParser(epilog="More: <webpage>")
+    parser.add_argument("--csgo-path", help="Path to CS:GO home folder")
+    parser.add_argument(
+        "--condump", help="Console dump to use (default: latest condumpXXX.txt)",
+        type=condumpxxx)
+
+    args = parser.parse_args()
+    if args.csgo_path:
+        CSGO_HOME_DIR = Path(args.csgo_path)
+    if args.condump:
+        CONDUMP = Path(args.condump)
+
+    with CONDUMP.open() as f:
+        lines = f.readlines()
+
+        server_addr = [_ for _ in lines if "Connected" in _][-1].split()[-1]
+        print("{0}Server: {1}{2}".format(C.BLUE, server_addr, C.ENDC))
+
+        download_url = [_ for _ in lines if "Downloading" in _][-1].split()[-1]
+        relative_path = [_ for _ in lines if "Aborting" in _][-1].split()[-1]
+
+        base_url = download_url[0:download_url.find(relative_path)]
+        print("{0}Base URL: {1}{2}\n".format(C.BLUE, base_url, C.ENDC))
+
+        # first material is in the "Aborting" line
+        materials = [relative_path]
+        materials.extend([_.split()[-1] for _ in lines if "Discarding" in _])
+
+    for material in materials:
+        print("{0}{1}Requesting {2}{3}".format(C.BOLD, C.PRPL, material, C.ENDC))
+        url = base_url + material
+        fpath = CSGO_HOME_DIR.joinpath(material)
+
+        if fpath.exists() or fpath.with_suffix("").exists():
+            continue
+        else:
+            # mkdir -p
+            fpath.parents[0].mkdir(parents=True, exist_ok=True)
+
+        if fpath.suffix == ".bz2":
+            try:
+                with request.urlopen(url) as response, \
+                        fpath.with_suffix("").open('wb') as f:
+                    print("{0}{1} Decompressing bzip2{3}"
+                          .format(C.BOLD, C.BLUE, material, C.ENDC))
+                    f.write(decompress(response.read()))
+            except HTTPError as err:
+                HTPPErrorHandler(err)
+                continue
+        else:
+            try:
+                with request.urlopen(url) as response, fpath.open('wb') as f:
+                    copyfileobj(response, f)
+            except HTTPError as err:
+                HTPPErrorHandler(err)
+                continue
+
+    print("\n{0}{1}Success!{2}".format(C.BOLD, C.BLUE, C.ENDC))
+    print("{0}{1} connect {2}{3}".format(C.BOLD, C.GREEN, server_addr, C.ENDC))
