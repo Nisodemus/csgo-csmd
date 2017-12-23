@@ -4,7 +4,7 @@ VERSION = "0.1"
 
 from argparse import ArgumentParser, ArgumentTypeError
 from bz2 import decompress
-from os import getuid
+from os import geteuid
 from pathlib import Path
 from re import compile, DOTALL
 from shutil import copyfileobj
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     print("{0}{1}CS:GO Community Server Materials Downloader v{2}{3}\n"
           .format(C.BOLD, C.PRPL, VERSION, C.ENDC))
 
-    if getuid() == 0:
+    if geteuid() == 0:
         print("{0}{1}Don't run this script as root!{2}"
               .format(C.RED, C.BOLD, C.ENDC), file=stderr)
         exit(-1)
