@@ -8,6 +8,8 @@ When one chooses a community server in a server list, the client basically execu
 
 ## Installation
 
+The script requires Python 3.
+
 Since the script must not be run as root (as it will lock the downloaded files under root), execute this in a terminal exactly as written out as a regular user (i.e. not root)(this assumes `sudo` is configured correctly):
 
 ```
