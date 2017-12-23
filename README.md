@@ -18,6 +18,8 @@ sudo chown $USER:$USER /usr/local/bin/csgo-csmd
 chmod +x /usr/local/bin/csgo-csmd
 ```
 
+> __TIP__: If you want to download less bloat from the community servers, you might want to use `cl_downloadfilter` option in your `autoexec.cfg`. You can set it to "all", "none" or "nosounds" in order to not filter out any files, filter out all files and filter out sound files respectively. Example: `cl_downloadfilter "nosounds"`.
+
 ## Usage
 
 1. Find a community server that your client refuses to connect to ("Downloading map <mapname> 0 % / 0 bytes").
