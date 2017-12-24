@@ -1,100 +1,178 @@
 #!/usr/bin/env python3
 
-VERSION = "0.1.1"
-
 from argparse import ArgumentParser, ArgumentTypeError
 from bz2 import decompress
-from os import geteuid
 from pathlib import Path
 from re import compile, DOTALL
 from shutil import copyfileobj
 from sys import stderr, exit
+from typing import Union, Any
 from urllib import request
 from urllib.error import HTTPError
 
-
-# Only supports bz2 at the moment because I haven't seen gzip, tar etc. used
-# If you happen to have such server, open a GitHub Issue
-SUFFIXES = [".bz2"]
+__version__ = "0.1.2"
 
 
-# ANSI Color escapes
-class C:
-    PRPL = '\033[95m'
-    BLUE = '\033[94m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
+class ANSIColors:
+    purple = '\033[95m'
+    blue = '\033[94m'
+    green = '\033[92m'
+    yellow = '\033[93m'
+    red = '\033[91m'
+    bold = '\033[1m'
+    end = '\033[0m'
 
 
-def HTPPErrorHandler(error):
-    if error.code == 404:
-        print("{0}  Not found on the server, skipping{1}"
-              .format(C.YELLOW, C.ENDC))
-    else:
-        raise error
+class HTPPErrorHandler:
+    def __init__(self, error: HTTPError) -> None:
+        self.error = error
+
+    def handle(self) -> None:
+        if self.error.code == 404:
+            print("{0}  Not found on the server, skipping{1}"
+                  .format(ANSIColors.yellow, ANSIColors.end))
+        else:
+            raise self.error
 
 
-def condumpxxx(string):
-    # condumpXXX.txt
-    if not compile('((?:[a-z][a-z]+))(\\d)(\\d)(\\d)(.)((?:[a-z][a-z]+))',
-                   DOTALL).search(string):
-        raise ArgumentTypeError("syntax: condumpXXX.txt")
-    else:
-        return string
+class VerifyCLASyntax:
+    @staticmethod
+    def condump(string: str) -> Union[str, ArgumentTypeError]:
+        # condumpXXX.txt
+        if not compile('(condump)(\\d)(\\d)(\\d)(\\.)(txt)',
+                       DOTALL).search(string):
+            raise ArgumentTypeError("{0}Accepted syntax: condumpXXX.txt{1}"
+                                    .format(ANSIColors.red, ANSIColors.end))
+        else:
+            return string
+
+    @staticmethod
+    def csgo_path(path: str) -> Union[str, ArgumentTypeError]:
+        if not Path(path).exists():
+            raise ArgumentTypeError("{0}Path does not exist.{1}"
+                                    .format(ANSIColors.red, ANSIColors.end))
+        else:
+            return path
+
+
+class ShouldNeverHappenError(Exception):
+    pass
+
+
+class CSMD:
+    def __init__(self) -> None:
+        self.csgo_home = None
+        self.condump = None
+        self.ip_port = None
+        self.base_url = None
+        self.materials = []
+
+    @staticmethod
+    def show_header() -> None:
+        print("{0}{1}CS:GO Community Server Materials Downloader v{2}{3}\n"
+              .format(ANSIColors.bold, ANSIColors.purple,
+                      __version__, ANSIColors.end))
+
+    @staticmethod
+    def prohibit_root() -> None:
+        from os import geteuid
+
+        if geteuid() == 0:
+            print("{0}{1}Don't run this script as root!{2}"
+                  .format(ANSIColors.red, ANSIColors.bold, ANSIColors.end),
+                  file=stderr)
+            exit(-1)
+
+    @staticmethod
+    def setup_args() -> ArgumentParser:
+        parser = ArgumentParser(
+            epilog="More: https://github.com/light2yellow/csgo-csmd")
+        parser.add_argument("--csgo-path", help="Path to CS:GO home folder",
+                            type=VerifyCLASyntax.csgo_path)
+        parser.add_argument("--condump", help="Console dump to use",
+                            type=VerifyCLASyntax.condump)
+        return parser
+
+    def parse_args(self, args: Any) -> None:
+        if args.csgo_path:
+            self.csgo_home = Path(args.csgo_path)
+        else:
+            self.csgo_home = Path.home().joinpath(
+                ".local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo")
+
+        if args.condump:
+            self.condump = Path(args.condump)
+        else:
+            try:
+                # Use latest console dump
+                self.condump = max(self.csgo_home.glob("condump*.txt"))
+            except ValueError:
+                print("{0}condumpXXX.txt not found in '{1}'{2}."
+                      .format(ANSIColors.red, self.csgo_home, ANSIColors.end))
+                print("{0}Have you executed 'condump' in CS:GO console?{1}"
+                      .format(ANSIColors.red, ANSIColors.end))
+
+    def parse_console_log(self) -> None:
+        with self.condump.open() as file:
+            lines = file.readlines()
+
+            addresses = [_ for _ in lines if _.startswith("Connected to")]
+            if not addresses:
+                raise IndexError("{0}Server IP not found{1}"
+                                 .format(ANSIColors.red, ANSIColors.end))
+
+            self.ip_port = addresses[0].split()[-1]
+            print("{0}Server: {1}{2}"
+                  .format(ANSIColors.blue, self.ip_port, ANSIColors.end))
+
+            full_urls = [_ for _ in lines if _.startswith("Downloading")]
+            if not full_urls:
+                raise IndexError("{0}Download URL not found{1}"
+                                 .format(ANSIColors.red, ANSIColors.end))
+
+            full_url = full_urls[0].split()[-1]
+
+            rpaths = [_ for _ in lines if _.startswith("Aborting download of")]
+            if not rpaths:
+                raise IndexError("{0}'Aborted' relative path not found{1}"
+                                 .format(ANSIColors.red, ANSIColors.end))
+
+            rpath = rpaths[0].split()[-1]
+
+            i = full_url.find(rpath)
+            if i == -1:
+                raise ShouldNeverHappenError(
+                    "{0}{1}Relative path not found in full URL!{2}"
+                    .format(ANSIColors.bold, ANSIColors.red, ANSIColors.end))
+
+            self.base_url = full_url[0:i]
+            print("{0}Base URL: {1}{2}\n"
+                  .format(ANSIColors.blue, self.base_url, ANSIColors.end))
+
+            # first material is in the "Aborting" line
+            self.materials.append(rpath)
+            materials = [_.split() for _ in lines if _.startswith("Discarding")]
+            if not materials:
+                raise IndexError("{0}Discarded materials not found{1}"
+                                 .format(ANSIColors.red, ANSIColors.end))
+
+            self.materials.extend([_[-1] for _ in materials])
 
 
 if __name__ == '__main__':
-    print("{0}{1}CS:GO Community Server Materials Downloader v{2}{3}\n"
-          .format(C.BOLD, C.PRPL, VERSION, C.ENDC))
+    CSMD.show_header()
+    CSMD.prohibit_root()
 
-    if geteuid() == 0:
-        print("{0}{1}Don't run this script as root!{2}"
-              .format(C.RED, C.BOLD, C.ENDC), file=stderr)
-        exit(-1)
+    csmd = CSMD()
+    csmd.parse_args(CSMD.setup_args().parse_args())
+    csmd.parse_console_log()
 
-    parser = ArgumentParser(epilog="More: <webpage>")
-    parser.add_argument("--csgo-path", help="Path to CS:GO home folder")
-    parser.add_argument(
-        "--condump", help="Console dump to use (default: latest condumpXXX.txt)",
-        type=condumpxxx)
-
-    args = parser.parse_args()
-    if args.csgo_path:
-        CSGO_HOME_DIR = Path(args.csgo_path)
-    else:
-        CSGO_HOME_DIR = Path.home().joinpath(
-            ".local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo")
-
-    if args.condump:
-        CONDUMP = Path(args.condump)
-    else:
-        # Use latest console dump
-        CONDUMP = sorted(CSGO_HOME_DIR.glob("condump*.txt"))[-1]
-
-    with CONDUMP.open() as f:
-        lines = f.readlines()
-
-        server_addr = [_ for _ in lines if "Connected" in _][-1].split()[-1]
-        print("{0}Server: {1}{2}".format(C.BLUE, server_addr, C.ENDC))
-
-        download_url = [_ for _ in lines if "Downloading" in _][-1].split()[-1]
-        relative_path = [_ for _ in lines if "Aborting" in _][-1].split()[-1]
-
-        base_url = download_url[0:download_url.find(relative_path)]
-        print("{0}Base URL: {1}{2}\n".format(C.BLUE, base_url, C.ENDC))
-
-        # first material is in the "Aborting" line
-        materials = [relative_path]
-        materials.extend([_.split()[-1] for _ in lines if "Discarding" in _])
-
-    for material in materials:
+    for material in csmd.materials:
         print("{0}{1}Requesting {2}{3}".format(
-            C.BOLD, C.PRPL, material, C.ENDC))
-        url = base_url + material
-        fpath = CSGO_HOME_DIR.joinpath(material)
+            ANSIColors.bold, ANSIColors.purple, material, ANSIColors.end))
+
+        url = csmd.base_url + material
+        fpath = csmd.csgo_home.joinpath(material)
 
         if fpath.exists() or fpath.with_suffix("").exists():
             continue
@@ -102,23 +180,34 @@ if __name__ == '__main__':
             # mkdir -p
             fpath.parents[0].mkdir(parents=True, exist_ok=True)
 
+        # Decompressing on-the-fly, thus with suffix ""
         if fpath.suffix == ".bz2":
             try:
                 with request.urlopen(url) as response, \
                         fpath.with_suffix("").open('wb') as f:
                     print("{0}{1} Decompressing bzip2{3}"
-                          .format(C.BOLD, C.BLUE, material, C.ENDC))
+                          .format(ANSIColors.bold, ANSIColors.blue,
+                                  material, ANSIColors.end))
                     f.write(decompress(response.read()))
             except HTTPError as err:
-                HTPPErrorHandler(err)
+                HTPPErrorHandler(err).handle()
+                # We know that we ignore 404 and raise
+                # everything else, so it's safe to continue
                 continue
         else:
             try:
-                with request.urlopen(url) as response, fpath.open('wb') as f:
+                with request.urlopen(url) as response, \
+                        fpath.open('wb') as f:
+                    # Use shutil to write response on-the-fly
                     copyfileobj(response, f)
             except HTTPError as err:
-                HTPPErrorHandler(err)
+                HTPPErrorHandler(err).handle()
+                # We know that we ignore 404 and raise
+                # everything else, so it's safe to continue
                 continue
 
-    print("\n{0}{1}Success!{2}".format(C.BOLD, C.BLUE, C.ENDC))
-    print("{0}{1} connect {2}{3}".format(C.BOLD, C.GREEN, server_addr, C.ENDC))
+    print("\n{0}{1}Success!{2}"
+          .format(ANSIColors.bold, ANSIColors.blue, ANSIColors.end))
+    print("{0}{1} connect {2}{3}"
+          .format(ANSIColors.bold, ANSIColors.green,
+                  csmd.ip_port, ANSIColors.end))
