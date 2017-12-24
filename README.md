@@ -47,3 +47,7 @@ Open new tickets through [GitHub Issues](https://github.com/light2yellow/csgo-cs
   * doesn't talk HTTPS (only HTTP)
 
 If any of the above makes your life worse, open a new issue.
+
+## License
+
+You are allowed to share and modify all files in this repository under BSD 3-clause license. See [LICENSE](LICENSE.md) for more details.
