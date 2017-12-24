@@ -50,4 +50,4 @@ If any of the above makes your life worse, open a new issue.
 
 ## License
 
-You are allowed to share and modify all files in this repository under BSD 3-clause license. See [LICENSE](LICENSE.md) for more details.
+You are allowed to share and modify all files in this repository under BSD 3-clause license. See [LICENSE](LICENSE) for more details.
