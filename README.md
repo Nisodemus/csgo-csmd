@@ -27,7 +27,7 @@ chmod +x /usr/local/bin/csgo-csmd
 3. Type `disconnect` and press `Enter`.
 4. Type `condump` and press `Enter`.
 5. Open a terminal (the one with a shell session) and run `csgo-csmd`.
-6. If the command output says "Success!" at the end, you might want to copy the `connect <ip:port>` on the very last line in order to quickly connect back to the server (use in-game console to execute the copied command).
+6. Open CS:GO console again and type `retry`.
 
 ### Command-line arguments
 
