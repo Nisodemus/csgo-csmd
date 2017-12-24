@@ -34,7 +34,7 @@ chmod +x /usr/local/bin/csgo-csmd
 See `csgo-csmd --help`.
 
 * `--csgo-path` - path to CS:GO folder. By default `.local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo` is used.
-* `--condump` - console dump, generated in step 4 above. Must have `condumpXXX.txt` syntax where `X` is a `0-9` digit.
+* `--condump` - console dump, generated in step 4 above. Must have `condumpXXX.txt` syntax where `X` is a `0-9` digit. By default, the latest `condumpXXX.txt` found in a CS:GO home path (specified by `--csgo-path`) is used
 
 ## Bugs and feature requests
 
