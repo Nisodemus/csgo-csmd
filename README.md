@@ -33,10 +33,38 @@ chmod +x /usr/local/bin/csgo-csmd
 
 ### Command-line arguments
 
-See `csgo-csmd --help`.
+```
+usage: csgo-csmd [-h] [--config-path CONFIG_PATH] [--csgo-path CSGO_PATH]
+                 [--condump CONDUMP]
 
-* `--csgo-path` - path to CS:GO folder. By default `/home/$USER/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo` is used.
-* `--condump` - console dump, generated in step 4 above. Must have `condumpXXX.txt` syntax where `X` is a `0-9` digit. By default, the latest `condumpXXX.txt` found in a CS:GO home path (specified by `--csgo-path`) is used.
+optional arguments:
+  -h, --help            show this help message and exit
+  --config-path CONFIG_PATH
+                        Path to CSMD config (default:
+                        /home/$USER/.config/csmd/csmd.conf)
+  --csgo-path CSGO_PATH
+                        Path to CS:GO home folder (default:
+                        /home/$USER/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo)
+  --condump CONDUMP     Console dump to use, can be either 'latest'
+                        or 'condumpXXX.txt' where X is a 0-9 digit
+```
+
+## Configuration
+
+CSMD provides a config in INI format (spaces between words are allowed). The default one is created upon the first invocation:
+
+```ini
+[path]
+csgo_path = /home/$USER/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo
+
+[log]
+type = condump
+condump = latest
+```
+
+* `csgo_path` can be anything `--csgo-path` accepts (see above)
+* `type` can only be `condump` just for now
+* `condump` can be anything `--condump` accepts (see above)
 
 ## Bugs and feature requests
 
@@ -44,9 +72,9 @@ Open new tickets through [GitHub Issues](https://github.com/light2yellow/csgo-cs
 
 ## Caveats
 
-`CSMD`:
-  * doesn't know how to decompress anything except bzip2
-  * doesn't talk HTTPS (only HTTP)
+* CSMD doesn't know how to decompress anything except bzip2
+* CSMD doesn't talk HTTPS (only HTTP)
+* `condump` is limited to 241 lines ([#1](https://github.com/light2yellow/csgo-csmd/issues/1))
 
 If any of the above makes your life worse, open a new issue.
 

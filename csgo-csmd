@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 from configparser import ConfigParser
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 from bz2 import decompress
 from pathlib import Path
 from re import compile, DOTALL
 from shutil import copyfileobj
 from sys import stderr, exit
-from typing import Any
+from typing import Any, Union
 from urllib import request
 from urllib.error import HTTPError
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 
 
 class ANSIColors:
@@ -39,21 +39,32 @@ class HTPPErrorHandler:
 class VerifyCLASyntax:
     @staticmethod
     def condump(string: str) -> str:
-        # condumpXXX.txt
-        if not compile('(condump)(\\d)(\\d)(\\d)(\\.)(txt)',
-                       DOTALL).search(string):
-            raise ArgumentTypeError("{0}Accepted syntax: condumpXXX.txt{1}"
-                                    .format(ANSIColors.red, ANSIColors.end))
-        else:
+        if string == "latest":
+            # Will be checked later
             return string
+        else:
+            # condumpXXX.txt
+            if not compile('(condump)(\\d)(\\d)(\\d)(\\.)(txt)',
+                           DOTALL).search(string):
+                raise ArgumentTypeError("{0}Accepted syntax: condumpXXX.txt{1}"
+                                        .format(ANSIColors.red, ANSIColors.end))
+            else:
+                return string
 
     @staticmethod
-    def csgo_path(path: str) -> str:
-        if not Path(path).exists():
-            raise ArgumentTypeError("{0}Path does not exist.{1}"
-                                    .format(ANSIColors.red, ANSIColors.end))
-        else:
-            return path
+    def path(path: Union[str, Path]) -> Union[str, Path]:
+        if isinstance(path, Path):
+            if not path.exists():
+                raise ArgumentTypeError("{0}Path does not exist.{1}"
+                                        .format(ANSIColors.red, ANSIColors.end))
+            else:
+                return path
+        if isinstance(path, str):
+            if not Path(path).exists():
+                raise ArgumentTypeError("{0}Path does not exist.{1}"
+                                        .format(ANSIColors.red, ANSIColors.end))
+            else:
+                return path
 
 
 class ShouldNeverHappenError(Exception):
@@ -62,11 +73,17 @@ class ShouldNeverHappenError(Exception):
 
 class CSMD:
     def __init__(self) -> None:
-        self.csgo_home = None
+        self.csgo_path = None
         self.condump = None
+        self.config_path = None
         self.ip_port = None
         self.base_url = None
         self.materials = []
+
+        self.config_path = Path.home().joinpath(".config/csmd/csmd.conf")
+        if not self.config_path.exists():
+            self.config_path.parents[0].mkdir(parents=True, exist_ok=True)
+            self.write_default_config()
 
     @staticmethod
     def show_header() -> None:
@@ -84,34 +101,84 @@ class CSMD:
                   file=stderr)
             exit(-1)
 
+    def write_default_config(self) -> None:
+        config = ConfigParser()
+        config['path'] = {}
+        config['path']['csgo_path'] = str(Path.home().joinpath(
+            ".local/share/Steam/steamapps/common/"
+            "Counter-Strike Global Offensive/csgo"))
+        config['log'] = {}
+        config['log']['type'] = "condump"  # TODO: log_file
+        config['log']['condump'] = "latest"
+
+        with self.config_path.open('w') as f:
+            config.write(f)
+
+    def parse_config(self) -> None:
+        parser = ConfigParser()
+        try:
+            parser.read_file(self.config_path.open())
+        except FileNotFoundError:
+            print("{0}Incorrect path to config{1}"
+                  .format(ANSIColors.red, ANSIColors.end))
+            exit(1)
+        try:
+            self.csgo_path = Path(parser['path']['csgo_path'])
+            self.condump = parser['log']['condump']
+        except KeyError:
+            print("{0}Incorrect csmd.conf{1}"
+                  .format(ANSIColors.red, ANSIColors.end))
+            exit(1)
+
     @staticmethod
     def setup_args() -> ArgumentParser:
         parser = ArgumentParser(
+            formatter_class=RawTextHelpFormatter,
             epilog="More: https://github.com/light2yellow/csgo-csmd")
-        parser.add_argument("--csgo-path", help="Path to CS:GO home folder",
-                            type=VerifyCLASyntax.csgo_path)
-        parser.add_argument("--condump", help="Console dump to use",
-                            type=VerifyCLASyntax.condump)
+        parser.add_argument(
+            "--config-path",
+            help="Path to CSMD config (default:\n"
+                 "/home/$USER/.config/csmd/csmd.conf)",
+            type=VerifyCLASyntax.path)
+        parser.add_argument(
+            "--csgo-path",
+            help="Path to CS:GO home folder (default:\n"
+                 "/home/$USER/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo)",
+                 type=VerifyCLASyntax.path)
+        parser.add_argument(
+            "--condump",
+            help="Console dump to use, can be either 'latest'\n"
+                 "or 'condumpXXX.txt' where X is a 0-9 digit",
+            type=VerifyCLASyntax.condump)
         return parser
 
     def parse_args(self, args: Any) -> None:
+        if args.config_path:
+            self.config_path = Path(args.config_path)
+        self.parse_config()
+
         if args.csgo_path:
-            self.csgo_home = Path(args.csgo_path)
+            self.csgo_path = Path(args.csgo_path)
         else:
-            self.csgo_home = Path.home().joinpath(
-                ".local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo")
+            VerifyCLASyntax.path(self.csgo_path)
 
         if args.condump:
-            self.condump = Path(args.condump)
-        else:
+            self.condump = args.condump
+
+        if self.condump == "latest":
             try:
                 # Use latest console dump
-                self.condump = max(self.csgo_home.glob("condump*.txt"))
+                self.condump = max(self.csgo_path.glob("condump*.txt"))
             except ValueError:
                 print("{0}condumpXXX.txt not found in '{1}'{2}."
-                      .format(ANSIColors.red, self.csgo_home, ANSIColors.end))
+                      .format(ANSIColors.red, self.csgo_path, ANSIColors.end))
                 print("{0}Have you executed 'condump' in CS:GO console?{1}"
                       .format(ANSIColors.red, ANSIColors.end))
+                exit(1)
+        else:
+            VerifyCLASyntax.condump(self.condump)
+            self.condump = self.csgo_path.joinpath(self.condump)
+            VerifyCLASyntax.path(self.condump)
 
     def parse_console_log(self) -> None:
         with self.condump.open() as file:
@@ -146,6 +213,7 @@ class CSMD:
             except ValueError:
                 print("{0}{1}Relative path not found in full URL!{2}"
                       .format(ANSIColors.bold, ANSIColors.red, ANSIColors.end))
+                exit(1)
 
             self.base_url = full_url[0:i]
             print("{0}Base URL: {1}{2}\n"
@@ -166,7 +234,7 @@ class CSMD:
                 ANSIColors.bold, ANSIColors.purple, material, ANSIColors.end))
 
             url = self.base_url + material
-            fpath = self.csgo_home.joinpath(material)
+            fpath = self.csgo_path.joinpath(material)
 
             # Since we don't download archives and decompress
             # on-the-fly, no *.bz2 files will be present and
