@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentTypeError
 from bz2 import decompress
 from pathlib import Path
@@ -139,11 +140,12 @@ class CSMD:
 
             rpath = rpaths[0].split()[-1]
 
-            i = full_url.find(rpath)
-            if i == -1:
-                raise ShouldNeverHappenError(
-                    "{0}{1}Relative path not found in full URL!{2}"
-                    .format(ANSIColors.bold, ANSIColors.red, ANSIColors.end))
+            i = 0
+            try:
+                i = full_url.index(rpath)
+            except ValueError:
+                print("{0}{1}Relative path not found in full URL!{2}"
+                      .format(ANSIColors.bold, ANSIColors.red, ANSIColors.end))
 
             self.base_url = full_url[0:i]
             print("{0}Base URL: {1}{2}\n"
