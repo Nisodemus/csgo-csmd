@@ -6,7 +6,7 @@ from pathlib import Path
 from re import compile, DOTALL
 from shutil import copyfileobj
 from sys import stderr, exit
-from typing import Union, Any
+from typing import Any
 from urllib import request
 from urllib.error import HTTPError
 
@@ -37,7 +37,7 @@ class HTPPErrorHandler:
 
 class VerifyCLASyntax:
     @staticmethod
-    def condump(string: str) -> Union[str, ArgumentTypeError]:
+    def condump(string: str) -> str:
         # condumpXXX.txt
         if not compile('(condump)(\\d)(\\d)(\\d)(\\.)(txt)',
                        DOTALL).search(string):
@@ -47,7 +47,7 @@ class VerifyCLASyntax:
             return string
 
     @staticmethod
-    def csgo_path(path: str) -> Union[str, ArgumentTypeError]:
+    def csgo_path(path: str) -> str:
         if not Path(path).exists():
             raise ArgumentTypeError("{0}Path does not exist.{1}"
                                     .format(ANSIColors.red, ANSIColors.end))
