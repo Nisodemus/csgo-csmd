@@ -158,6 +158,49 @@ class CSMD:
 
             self.materials.extend([_[-1] for _ in materials])
 
+    def download_materials(self) -> None:
+        for material in self.materials:
+            print("{0}{1}Requesting {2}{3}".format(
+                ANSIColors.bold, ANSIColors.purple, material, ANSIColors.end))
+
+            url = self.base_url + material
+            fpath = self.csgo_home.joinpath(material)
+
+            # Since we don't download archives and decompress
+            # on-the-fly, no *.bz2 files will be present and
+            # therefore we check for with_suffix(""), too
+            if fpath.exists() or fpath.with_suffix("").exists():
+                continue
+            else:
+                # mkdir -p
+                fpath.parents[0].mkdir(parents=True, exist_ok=True)
+
+            # Decompressing on-the-fly, thus with_suffix("")
+            if fpath.suffix == ".bz2":
+                try:
+                    with request.urlopen(url) as response, \
+                            fpath.with_suffix("").open('wb') as f:
+                        print("{0}{1} Decompressing bzip2{3}"
+                              .format(ANSIColors.bold, ANSIColors.blue,
+                                      material, ANSIColors.end))
+                        f.write(decompress(response.read()))
+                except HTTPError as err:
+                    HTPPErrorHandler(err).handle()
+                    # We know that we ignore 404 and raise
+                    # everything else, so it's safe to continue
+                    continue
+            else:
+                try:
+                    with request.urlopen(url) as response, \
+                            fpath.open('wb') as f:
+                        # Use shutil to write response on-the-fly
+                        copyfileobj(response, f)
+                except HTTPError as err:
+                    HTPPErrorHandler(err).handle()
+                    # We know that we ignore 404 and raise
+                    # everything else, so it's safe to continue
+                    continue
+
 
 if __name__ == '__main__':
     CSMD.show_header()
@@ -166,45 +209,7 @@ if __name__ == '__main__':
     csmd = CSMD()
     csmd.parse_args(CSMD.setup_args().parse_args())
     csmd.parse_console_log()
-
-    for material in csmd.materials:
-        print("{0}{1}Requesting {2}{3}".format(
-            ANSIColors.bold, ANSIColors.purple, material, ANSIColors.end))
-
-        url = csmd.base_url + material
-        fpath = csmd.csgo_home.joinpath(material)
-
-        if fpath.exists() or fpath.with_suffix("").exists():
-            continue
-        else:
-            # mkdir -p
-            fpath.parents[0].mkdir(parents=True, exist_ok=True)
-
-        # Decompressing on-the-fly, thus with suffix ""
-        if fpath.suffix == ".bz2":
-            try:
-                with request.urlopen(url) as response, \
-                        fpath.with_suffix("").open('wb') as f:
-                    print("{0}{1} Decompressing bzip2{3}"
-                          .format(ANSIColors.bold, ANSIColors.blue,
-                                  material, ANSIColors.end))
-                    f.write(decompress(response.read()))
-            except HTTPError as err:
-                HTPPErrorHandler(err).handle()
-                # We know that we ignore 404 and raise
-                # everything else, so it's safe to continue
-                continue
-        else:
-            try:
-                with request.urlopen(url) as response, \
-                        fpath.open('wb') as f:
-                    # Use shutil to write response on-the-fly
-                    copyfileobj(response, f)
-            except HTTPError as err:
-                HTPPErrorHandler(err).handle()
-                # We know that we ignore 404 and raise
-                # everything else, so it's safe to continue
-                continue
+    csmd.download_materials()
 
     print("\n{0}{1}Success!{2}"
           .format(ANSIColors.bold, ANSIColors.blue, ANSIColors.end))
