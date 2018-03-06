@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-
+#todo - figure out why certain servers seen to bork everything, https, readability, 
+#       
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 from bz2 import decompress
@@ -143,7 +144,7 @@ class CSMD:
         parser.add_argument(
             "--csgo-path",
             help="Path to CS:GO home folder (default:\n"
-                 "/home/$USER/.local/share/Steam/steamapps/common/Counter-Strike Global Offensive/csgo)",
+                 "/media/steam/steamapps/common/Counter-Strike Global Offensive/csgo)",
                  type=VerifyCLASyntax.path)
         parser.add_argument(
             "--condump",
