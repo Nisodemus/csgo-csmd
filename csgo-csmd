@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-#todo - figure out why certain servers seen to bork everything, https, readability, 
+#todo - figure out why certain servers seen to bork everything, https, readability, sound file bug, file names with spaces
+# breaks everything. 
 #       
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
