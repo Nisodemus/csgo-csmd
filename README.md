@@ -1,3 +1,5 @@
+THE BUG THAT THIS WAS WORKING AROUND HAS NOW BEEN FIXED IN CSGO'S SOURCE. ONLY TOOK THEM 7 YEARS. *CLAP CLAP* 
+
 # CS:GO Community Server Materials Downloader
 
 `CSMD` downloads community server's files based on a console log of file requests. It is created for Linux, but can be used on macOS or Windows if needed.
